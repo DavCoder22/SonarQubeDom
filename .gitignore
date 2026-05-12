@@ -1,0 +1,64 @@
+# =============================================================================
+# TERRAFORM - Ignorar archivos de estado y planificación
+# Estos contienen información sensible de tu infraestructura
+# =============================================================================
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+*.tfplan
+
+# =============================================================================
+# DOCKER - Ignorar variables de entorno locales
+# Los archivos .env suelen contener passwords y tokens
+# =============================================================================
+.env
+.env.local
+.env.*.local
+docker-compose.override.yml
+
+# =============================================================================
+# SONARQUBE DATA - NUNCA subir volúmenes de datos locales
+# Estos son gigabytes de logs, bases de datos y configuraciones
+# =============================================================================
+sonarqube-data/
+postgresql-data/
+data/
+logs/
+
+# =============================================================================
+# SECRETS Y CREDENCIALES - Archivos de claves privadas
+# =============================================================================
+*.pem
+*.key
+*.crt
+secrets/
+credentials.json
+token.txt
+
+# =============================================================================
+# IDE Y EDITORES - Configuraciones personales
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# SISTEMA OPERATIVO - Archivos basura de macOS y Windows
+# =============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =============================================================================
+# REPORTES GENERADOS - Trivy, Allure, coverage, etc.
+# =============================================================================
+*.sarif
+coverage/
+reports/
+allure-results/

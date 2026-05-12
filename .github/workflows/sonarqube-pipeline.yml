@@ -1,0 +1,172 @@
+# =============================================================================
+# GITHUB ACTIONS - PIPELINE SONARQUBE QA
+# =============================================================================
+name: 🛡️ SonarQube QA Infrastructure Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  TERRAFORM_VERSION: "1.7.0"
+  DOCKER_IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # ===========================================================================
+  # JOB 1: VALIDAR INFRAESTRUCTURA (Terraform)
+  # ===========================================================================
+  validate-infra:
+    name: 🔍 Validar Terraform
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout del código
+        uses: actions/checkout@v4
+      
+      - name: ⚙️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+      
+      - name: 📝 Verificar formato Terraform
+        working-directory: ./terraform
+        run: terraform fmt -check -recursive
+      
+      - name: 🏗️ Terraform Init
+        working-directory: ./terraform
+        run: terraform init -backend=false
+      
+      - name: ✅ Validar configuración
+        working-directory: ./terraform
+        run: terraform validate
+
+  # ===========================================================================
+  # JOB 2: CONSTRUIR Y ESCANEAR IMAGEN DOCKER
+  # ===========================================================================
+  build-and-scan:
+    name: 🐳 Build & Security Scan
+    needs: validate-infra
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+      
+      - name: 🔨 Build Docker Image
+        run: |
+          docker build \
+            -f docker/Dockerfile.sonarqube \
+            -t sonarqube-custom:${{ env.DOCKER_IMAGE_TAG }} \
+            -t sonarqube-custom:latest \
+            .
+      
+      - name: 🔒 Security Scan con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sonarqube-custom:${{ env.DOCKER_IMAGE_TAG }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: 📤 Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-security-scan
+          path: trivy-results.sarif
+
+  # ===========================================================================
+  # JOB 3: DESPLEGAR INFRAESTRUCTURA
+  # ===========================================================================
+  deploy:
+    name: 🚀 Desplegar SonarQube
+    needs: build-and-scan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+      
+      - name: ⚙️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      
+      - name: 🏗️ Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+      
+      - name: 📋 Terraform Plan
+        working-directory: ./terraform
+        run: terraform plan -out=tfplan
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+      
+      - name: 🚀 Terraform Apply
+        working-directory: ./terraform
+        run: terraform apply -auto-approve tfplan
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+
+  # ===========================================================================
+  # JOB 4: CONFIGURAR QUALITY GATES VÍA API
+  # ===========================================================================
+  configure-quality-gates:
+    name: ⚙️ Configurar Quality Gates
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+      
+      - name: ⏳ Esperar SonarQube
+        run: |
+          for i in {1..30}; do
+            if curl -sf ${{ secrets.SONAR_HOST_URL }}/api/system/status | grep -q '"status":"UP"'; then
+              echo "✅ SonarQube está listo!"
+              exit 0
+            fi
+            echo "Intento $i/30 - esperando 10 segundos..."
+            sleep 10
+          done
+          echo "❌ SonarQube no respondió a tiempo"
+          exit 1
+      
+      - name: 🚦 Crear Quality Gate
+        run: |
+          curl -u ${{ secrets.SONAR_TOKEN }}: \
+            -X POST "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/create" \
+            -d "name=Strict-QA-Gate"
+      
+      - name: 📊 Configurar métricas del Gate
+        run: |
+          curl -u ${{ secrets.SONAR_TOKEN }}: \
+            -X POST "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/create_condition" \
+            -d "gateName=Strict-QA-Gate" \
+            -d "metric=coverage" \
+            -d "op=LT" \
+            -d "error=80"
+          
+          curl -u ${{ secrets.SONAR_TOKEN }}: \
+            -X POST "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/create_condition" \
+            -d "gateName=Strict-QA-Gate" \
+            -d "metric=blocker_violations" \
+            -d "op=GT" \
+            -d "error=0"
+          
+          curl -u ${{ secrets.SONAR_TOKEN }}: \
+            -X POST "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/create_condition" \
+            -d "gateName=Strict-QA-Gate" \
+            -d "metric=vulnerabilities" \
+            -d "op=GT" \
+            -d "error=0"
+      
+      - name: ⭐ Set como default
+        run: |
+          curl -u ${{ secrets.SONAR_TOKEN }}: \
+            -X POST "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/set_as_default" \
+            -d "name=Strict-QA-Gate"
