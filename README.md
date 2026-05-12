@@ -4,132 +4,92 @@ Infraestructura como Código (IaC) para desplegar **SonarQube Community Edition*
 
 ---
 
-## 🏗️ Arquitectura
+## 🏗️ Arquitectura - Mapa Tecnológico
 
-```dot
-digraph "SonarQube + Quality Gates + GitHub Actions" {
-    bgcolor="transparent";
-    rankdir=TB;
-    node [
-        shape=box,
-        style="rounded,filled",
-        fontname="Helvetica",
-        fontsize=11,
-        penwidth=1.5
-    ];
-    edge [
-        fontname="Helvetica",
-        fontsize=10,
-        penwidth=1.5
-    ];
+```mermaid
+flowchart TB
+    subgraph DESARROLLO["📱 ENTORNO DE DESARROLLO"]
+        DEV[("👤 Developer")]
+        CODE[("📝 Código Fuente")]
+        PR[("🔀 Pull Request")]
+    end
 
-    Developer [
-        label="👤 Developer\n(Push/PR)",
-        shape=ellipse,
-        fillcolor="#00BCD4",
-        color="#00E5FF",
-        fontcolor="#FFFFFF"
-    ];
-    
-    GitHub_Repo [
-        label="📁 GitHub\nRepository",
-        shape=folder,
-        fillcolor="#2962FF",
-        color="#448AFF",
-        fontcolor="#FFFFFF"
-    ];
-    
-    GitHub_Actions [
-        label="⚙️ GitHub Actions\n(Orquestador CI/CD)\n• Validar Terraform\n• Build Docker\n• Deploy",
-        shape=component,
-        fillcolor="#00C853",
-        color="#69F0AE",
-        fontcolor="#000000"
-    ];
-    
-    SonarQube [
-        label="🔍 SonarQube\n(Análisis de Código)\n• Calidad Estática\n• Cobertura\n• Vulnerabilidades",
-        shape=box3d,
-        fillcolor="#76FF03",
-        color="#64DD17",
-        fontcolor="#000000"
-    ];
-    
-    Quality_Gates [
-        label="🚦 Quality Gates\n(Reglas QA)\n• Cobertura ≥ 80%\n• 0 Bugs Críticos\n• 0 Vulnerabilidades\n• 0 Code Smells",
-        shape=diamond,
-        fillcolor="#FFD600",
-        color="#FFFF00",
-        fontcolor="#000000"
-    ];
-    
-    Pass [
-        label="✅ PASS\nPR Aprobado\nMerge Permitido",
-        shape=ellipse,
-        fillcolor="#00E676",
-        color="#69F0AE",
-        fontcolor="#000000"
-    ];
-    
-    Fail [
-        label="❌ FAIL\nPR Rechazado\nMerge Bloqueado",
-        shape=ellipse,
-        fillcolor="#FF1744",
-        color="#FF5252",
-        fontcolor="#FFFFFF"
-    ];
+    subgraph PLATAFORMA["☁️ PLATAFORMA CLOUD"]
+        subgraph GITHUB["🐙 GitHub"]
+            REPO["📁 Repository"]
+            ACTIONS["⚙️ GitHub Actions"]
+            TRIGGERS["🎯 Triggers"]
+        end
 
-    Developer -> GitHub_Repo [
-        label="1. git push / Pull Request",
-        color="#00E5FF",
-        fontcolor="#00E5FF"
-    ];
+        subgraph CI_CD["🔄 CI/CD Pipeline"]
+            VALIDATE["✅ Validar\nTerraform"]
+            BUILD["🐳 Build\nDocker + Trivy"]
+            DEPLOY["🚀 Deploy\nInfraestructura"]
+            CONFIGURE["⚙️ Config\nQuality Gates"]
+        end
+    end
+
+    subgraph INFRA["🖥️ INFRAESTRUCTURA"]
+        subgraph DOCKER["🐳 Docker"]
+            SQ["🔍 SonarQube\nServer"]
+            PG["🗄️ PostgreSQL\nDatabase"]
+            NET["🌐 Network"]
+        end
+    end
+
+    subgraph ANALISIS["📊 ANÁLISIS DE CÓDIGO"]
+        SCAN["🔎 SonarScanner"]
+        METRICS["📈 Métricas\n• Cobertura\n• Bugs\n• Vulnerabilidades"]
+        QG["🚦 Quality Gates\n• Coverage ≥ 80%\n• 0 Bugs\n• 0 Vulnerab."]
+    end
+
+    subgraph RESULTADOS["📋 RESULTADOS"]
+        PASS["✅ PASS\nAprobado"]
+        FAIL["❌ FAIL\nRechazado"]
+    end
+
+    DEV --> CODE
+    CODE --> PR
+    PR --> REPO
+    REPO --> TRIGGERS
+    TRIGGERS --> ACTIONS
     
-    GitHub_Repo -> GitHub_Actions [
-        label="2. Trigger automático",
-        color="#448AFF",
-        fontcolor="#448AFF"
-    ];
+    ACTIONS --> VALIDATE
+    VALIDATE --> BUILD
+    BUILD --> DEPLOY
+    DEPLOY --> CONFIGURE
     
-    GitHub_Actions -> SonarQube [
-        label="3. Ejecuta análisis estático",
-        color="#69F0AE",
-        fontcolor="#69F0AE"
-    ];
+    DEPLOY --> SQ
+    SQ --> PG
+    SQ --> NET
     
-    SonarQube -> Quality_Gates [
-        label="4. Evalúa métricas",
-        color="#76FF03",
-        fontcolor="#76FF03"
-    ];
+    SQ --> SCAN
+    SCAN --> METRICS
+    METRICS --> QG
     
-    Quality_Gates -> Pass [
-        label="Cumple ≥ 80% cobertura",
-        color="#00E676",
-        fontcolor="#00E676"
-    ];
+    QG --> PASS
+    QG --> FAIL
     
-    Quality_Gates -> Fail [
-        label="No cumple métricas",
-        color="#FF5252",
-        fontcolor="#FF5252"
-    ];
-    
-    Pass -> GitHub_Repo [
-        label="6a. Permite merge",
-        color="#00E676",
-        fontcolor="#00E676",
-        style="dashed"
-    ];
-    
-    Fail -> GitHub_Repo [
-        label="6b. Bloquea merge",
-        color="#FF1744",
-        fontcolor="#FF1744",
-        style="dashed",
-        penwidth=2
-    ];
-}
+    PASS -.->|"Merge"| REPO
+    FAIL -.->|"Bloqueado"| REPO
+
+    style DEV fill:#00BCD4,color:#fff
+    style CODE fill:#2962FF,color:#fff
+    style PR fill:#7C4DFF,color:#fff
+    style REPO fill:#2962FF,color:#fff
+    style ACTIONS fill:#00C853,color:#000
+    style VALIDATE fill:#00E676,color:#000
+    style BUILD fill:#76FF03,color:#000
+    style DEPLOY fill:#64DD17,color:#000
+    style CONFIGURE fill:#1DE9B6,color:#000
+    style SQ fill:#76FF03,color:#000
+    style PG fill:#FFD600,color:#000
+    style NET fill:#448AFF,color:#fff
+    style SCAN fill:#FFAB00,color:#000
+    style METRICS fill:#FF9100,color:#000
+    style QG fill:#FFD600,color:#000
+    style PASS fill:#00E676,color:#000
+    style FAIL fill:#FF1744,color:#fff
 ```
 
 ---
