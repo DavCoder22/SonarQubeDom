@@ -150,7 +150,12 @@ sonarqube-qa-infrastructure/
 
 ## 📖 Documentación
 
-- [Guía de Despliegue](./docs/deployment-guide.md)
+### Guías de configuración
+- [🔐 Configurar Secrets en GitHub](./docs/setup-github-secrets.md) - Cómo configurar variables de entorno y tokens
+- [⚙️ GitHub Actions Explicado](./docs/github-actions.md) - Explicación detallada del pipeline CI/CD
+- [🚀 Guía de Despliegue](./docs/deployment-guide.md) - Cómo levantar SonarQube local y en la nube
+
+### Temas avanzados
 - [Configuración de Quality Gates](./docs/quality-gates.md)
 - [Pipeline CI/CD](./docs/cicd-pipeline.md)
 
